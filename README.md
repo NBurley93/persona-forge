@@ -4,6 +4,9 @@ A SillyTavern extension for designing personas with the AI. You describe a conce
 an XML template, and then you keep shaping it until it's right. When you're done, you save it as a
 persona.
 
+> **Mobile compatibility is still pending.** Persona Forge is built and tested for desktop browsers. On a
+> phone the window may be cramped or awkward to use.
+
 ## Install
 
 Copy this folder into your SillyTavern user extensions directory and reload ST:
