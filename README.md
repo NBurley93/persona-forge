@@ -31,6 +31,8 @@ SillyTavern/data/default-user/extensions/persona-forge/
 | **Edit** | Type into any field, or edit the raw XML in the XML tab. |
 | **Add** (+) | In a freeform section or any group inside one: add your own field ("Favorite drink"), or fill in sub-fields to make a nested group ("Tattoos" with "Left arm, Back"). Leave the values blank and the AI writes them. In a group of repeated items like Scent, the name defaults to another of that item. |
 | **Remove** (×) | Removes a field or group in a freeform section. A group left empty goes too. Removals stick: the model isn't asked for that field again, even if the template has it. |
+| **Style** (sliders) | Shapes how a field is written without changing what it says: a length (terse, short phrase, one or two sentences, detailed) plus an optional note, e.g. *"Like a candle scent name: 'smoky vanilla'"*. Set it on a field (covers every repeat of it, like all Scent Hints) or on a group (covers everything inside). Styles are followed by every Generate, Refine and Reroll. |
+| **Restyle** | Rewrites the fields that have a style so they fit it, keeping their content. Locked fields are left alone. Setting a style offers to restyle its current values straight away. |
 | **Versions** | Every AI change is a new version. Step through them with ◀ ▶, or click `→ vN` in the design log. |
 | **Load** | Pulls an existing persona's description in as a starting point. |
 | **Save to selected** / **Save as new persona** | Writes the current version into a persona description. |
@@ -47,3 +49,4 @@ The session (concept, versions, locks, log) is saved, so closing the window does
   new detail. Once a persona exists, its freeform sections take their shape from the persona rather than the template.
 - **Instructions**: the system prompt.
 - **Example persona**: paste a finished persona to show the model the depth and tone you want.
+- **Field styles**: every style you've set, with the option to remove them. The default styles Scent Hints as terse candle-scent names.

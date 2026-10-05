@@ -87,6 +87,19 @@ Rules:
 - <backstory>: two to four short paragraphs of concrete history that explain who the character is now.
 - <personality>: core traits, contradictions, mannerisms, speech habits, likes and dislikes.`;
 
+// Field styles shape how a value is written (its length and register), not what it says.
+const LENGTH_PRESETS = {
+    terse: { label: 'Terse — 1 to 4 words', guide: '1 to 4 words, a label rather than a sentence' },
+    short: { label: 'Short phrase', guide: 'a short phrase, a dozen words at most' },
+    concise: { label: 'One or two sentences', guide: 'one or two plain sentences' },
+    detailed: { label: 'Detailed', guide: 'rich and specific, several sentences' },
+};
+
+// Keyed by plain path (no [n] suffixes), so one style covers every repeated item. A group's style covers its fields.
+const DEFAULT_FIELD_STYLES = {
+    'misc_attributes/scent/scent_hint': { length: 'terse', note: 'Like a candle scent name, e.g. "smoky vanilla", "black cardamom".' },
+};
+
 const defaultSettings = Object.freeze({
     profileId: '',
     maxTokens: 3000,
@@ -95,6 +108,7 @@ const defaultSettings = Object.freeze({
     example: '',
     renameRoot: true,
     historyLimit: 30,
+    fieldStyles: DEFAULT_FIELD_STYLES,
     session: null,
 });
 
@@ -393,6 +407,37 @@ function systemPrompt() {
     return text;
 }
 
+// ----------------------------------------------------------------------------- field styles
+
+/** The style that governs a plain path: its own, else the nearest styled group above it. */
+function styleFor(plainPath) {
+    const styles = settings().fieldStyles;
+    const segments = plainPath.split('/');
+    for (let i = segments.length; i > 0; i--) {
+        const path = segments.slice(0, i).join('/');
+        if (styles[path]) return { path, style: styles[path], inherited: i < segments.length };
+    }
+    return null;
+}
+
+function styleText(style) {
+    return [LENGTH_PRESETS[style?.length]?.guide, style?.note?.trim()].filter(Boolean).join('. ');
+}
+
+/** Style guide lines for every style that touches the subtree at `scope` (all styles when scope is empty). */
+function styleGuideBlock(scope = '') {
+    const lines = Object.entries(settings().fieldStyles)
+        .filter(([path]) => !scope || path === scope || path.startsWith(`${scope}/`) || scope.startsWith(`${path}/`))
+        .map(([path, style]) => [path, styleText(style)])
+        .filter(([, text]) => text)
+        .map(([path, text]) => `- ${path}: ${text}`);
+    if (!lines.length) return '';
+    return 'Style guide for specific fields. A group\'s guide covers every field inside it; repeated fields share one guide. '
+        + 'Follow it for length and phrasing:\n' + lines.join('\n');
+}
+
+const plainOf = (path) => path.replace(/\[\d+\]/g, '');
+
 function lockedBlock(locked) {
     const entries = Object.entries(locked);
     if (!entries.length) return '';
@@ -411,6 +456,7 @@ function buildGenerateMessages(locked) {
         concept
             ? `Create a new persona from this concept:\n<concept>\n${concept}\n</concept>`
             : 'Invent an original, specific and interesting persona.',
+        styleGuideBlock(),
         lockedBlock(locked),
         'Return the completed XML.',
     ];
@@ -428,6 +474,7 @@ function buildRefineMessages(instruction, locked) {
         earlier.length ? `Earlier change requests (already applied, for context only):\n${earlier.join('\n')}` : '',
         `Revise the persona according to this request:\n<request>\n${instruction}\n</request>`,
         'Change what the request asks for, plus anything that must change to stay consistent with it. Leave everything else exactly as it is.',
+        styleGuideBlock(),
         lockedBlock(locked),
         'Return the complete revised XML.',
     ];
@@ -449,6 +496,7 @@ function buildFieldMessages(path, value, direction) {
             : value
                 ? 'Make it meaningfully different from the current value while staying consistent with the rest of the persona.'
                 : 'Make it specific and consistent with the rest of the persona.',
+        styleFor(plainOf(path)) ? `Style for this field: ${styleText(styleFor(plainOf(path)).style)}.` : '',
         'Respond with only the new value as plain text: no tags, no quotes, no explanation.',
     ];
     return [
@@ -471,11 +519,29 @@ function buildSectionMessages(path, sectionXml, freeform, direction) {
         freeform
             ? 'Keep the same fields; you may add a field if the direction calls for one.'
             : 'Keep exactly the same fields, nesting and order.',
+        styleGuideBlock(plainOf(path)),
         `Respond with only that section's XML, from <${tag}> to </${tag}>. No commentary.`,
     ];
     return [
         { role: 'system', content: `${settings().systemPrompt.trim()}\n\nFor this task you are rewriting one section of an existing persona, and you output only that section.` },
         { role: 'user', content: parts.filter(Boolean).join('\n\n') },
+    ];
+}
+
+/** @param {{path: string, value: string, style: string}[]} targets */
+function buildRestyleMessages(targets) {
+    const fields = targets
+        .map(t => `<field path="${t.path}" style="${t.style.replace(/"/g, '\'')}">${t.value}</field>`)
+        .join('\n');
+    const parts = [
+        'Rewrite each field value below so it follows its style. Keep what it says: the same facts, details and meaning. '
+            + 'Change only the length and phrasing, trimming flourishes rather than inventing new content. If a value already fits its style, return it unchanged.',
+        fields,
+        'Return every field in the same format, one per line: <field path="...">new value</field>. No style attribute, no commentary.',
+    ];
+    return [
+        { role: 'system', content: 'You are a copy editor for character profiles. You reshape the wording of field values to fit a style guide without changing their content.' },
+        { role: 'user', content: parts.join('\n\n') },
     ];
 }
 
@@ -611,6 +677,9 @@ function forgeHtml() {
                 <div id="pf-apply" class="menu_button menu_button_icon" title="Ask the AI to revise the current version">
                     <i class="fa-solid fa-pen-nib"></i><span>Apply change</span>
                 </div>
+                <div id="pf-restyle" class="menu_button menu_button_icon" title="Rewrite every field that has a style so it fits it, without changing what it says. Set styles with the sliders button on a field or group.">
+                    <i class="fa-solid fa-sliders"></i><span>Restyle</span>
+                </div>
             </div>
         </div>
     </div>
@@ -650,7 +719,7 @@ function forgeHtml() {
 
 function setBusy(busy, label = '') {
     if (!ui) return;
-    ui.find('#pf-generate, #pf-apply, #pf-load, #pf-update, #pf-create, #pf-new-session, .pf-reroll, .pf-reroll-section, .pf-add-field, .pf-remove-field').toggleClass('disabled', busy);
+    ui.find('#pf-generate, #pf-apply, #pf-load, #pf-update, #pf-create, #pf-new-session, .pf-reroll, .pf-reroll-section, .pf-add-field, .pf-remove-field, #pf-restyle, .pf-style').toggleClass('disabled', busy);
     ui.find('#pf-cancel').toggleClass('pf-hidden', !busy);
     ui.find('#pf-status').html(busy ? `<i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(label)}` : '');
     ui.toggleClass('pf-busy', busy);
@@ -739,6 +808,16 @@ function renderFields() {
     const locks = new Set(session().locks);
     const sections = freeformPaths();
 
+    const styleIcon = (plainPath) => {
+        const found = styleFor(plainPath);
+        const state = !found ? '' : (found.inherited ? ' pf-style-inherited' : ' pf-styled');
+        const tip = !found
+            ? 'Set a style (length and phrasing) for this'
+            : `${found.inherited ? `Style from ${prettyPath(found.path)}` : 'Style'}: ${styleText(found.style)}
+Click to change`;
+        return `<i class="fa-solid fa-sliders pf-style${state}" data-plain="${escapeHtml(plainPath)}" title="${escapeHtml(tip)}"></i>`;
+    };
+
     const build = (el, depth) => {
         const kids = [...el.children];
         const path = elementPath(el);
@@ -753,6 +832,7 @@ function renderFields() {
                     <label class="pf-field-label" title="${escapeHtml(path)}">${escapeHtml(label)}</label>
                     <textarea class="text_pole pf-field-input" rows="1"></textarea>
                     <div class="pf-field-actions">
+                        ${styleIcon(elementPath(el, true))}
                         <i class="fa-solid ${locked ? 'fa-lock' : 'fa-lock-open'} pf-lock" title="Lock this field — regenerations and refinements keep it as-is"></i>
                         <i class="fa-solid fa-dice pf-reroll" title="Reroll this field (Shift+click to give direction)"></i>
                         ${freeform ? '<i class="fa-solid fa-xmark pf-remove-field" title="Remove this field"></i>' : ''}
@@ -771,6 +851,7 @@ function renderFields() {
         if (sectionRoot) title.append('<span class="pf-badge" title="You can add your own fields and groups to this section">freeform</span>');
         if (depth > 0) {
             const actions = $('<span class="pf-group-actions"></span>').appendTo(title);
+            actions.append(styleIcon(elementPath(el, true)));
             if (kids.length) actions.append('<i class="fa-solid fa-dice pf-reroll-section" title="Reroll this whole section (Shift+click to give direction). Locked fields inside are kept."></i>');
             if (freeform) actions.append('<i class="fa-solid fa-plus pf-add-field" title="Add a field or group here"></i>');
             if (freeform && !sectionRoot) actions.append('<i class="fa-solid fa-xmark pf-remove-field" title="Remove this group and everything in it"></i>');
@@ -1030,6 +1111,111 @@ function extractFieldValue(reply, tag) {
     return text.replace(/<\/?[A-Za-z_][\w.-]*\s*\/?>/g, '').replace(/^["“]([\s\S]*)["”]$/, '$1').trim();
 }
 
+/** Edits the style for a plain path (a field, all its repeats, or a whole group). */
+async function editStyle(plainPath, isGroup) {
+    const c = ctx();
+    const styles = settings().fieldStyles;
+    const own = styles[plainPath] ?? { length: '', note: '' };
+    const found = styleFor(plainPath);
+    const inherited = found?.inherited ? found : null;
+
+    const form = $(`
+        <div class="pf-style-form">
+            <h3>Style for ${escapeHtml(prettyPath(plainPath))}</h3>
+            <p class="pf-style-scope">${isGroup ? 'Applies to every field in this group, unless a field has its own style.' : 'Applies to this field, and to every repeat of it.'}
+                Styles shape the wording and length, not the content.</p>
+            ${inherited ? `<p class="pf-style-scope">Currently inherits from ${escapeHtml(prettyPath(inherited.path))}: <i>${escapeHtml(styleText(inherited.style))}</i></p>` : ''}
+            <label>Length
+                <select class="text_pole pf-style-length">
+                    <option value="">No preference</option>
+                    ${Object.entries(LENGTH_PRESETS).map(([key, p]) => `<option value="${key}">${escapeHtml(p.label)}</option>`).join('')}
+                </select>
+            </label>
+            <label>Style note
+                <textarea class="text_pole pf-style-note" rows="2" placeholder='e.g. Like a candle scent name: "smoky vanilla". Or: plain and clinical, no metaphors.'></textarea>
+            </label>
+            <label class="checkbox_label"><input type="checkbox" class="pf-style-apply" checked> Restyle the current ${isGroup ? 'values' : 'value'} now</label>
+        </div>`);
+    form.find('.pf-style-length').val(own.length || '');
+    form.find('.pf-style-note').val(own.note || '');
+
+    let captured = null;
+    const CLEAR = c.POPUP_RESULT?.CUSTOM1 ?? 1001;
+    const popup = new c.Popup(form, c.POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Save',
+        cancelButton: 'Cancel',
+        customButtons: styles[plainPath] ? [{ text: 'Clear style', result: CLEAR, classes: ['pf-style-clear'] }] : null,
+        onClosing: () => {
+            captured = {
+                length: String(form.find('.pf-style-length').val() || ''),
+                note: String(form.find('.pf-style-note').val() || '').trim(),
+                apply: form.find('.pf-style-apply').prop('checked'),
+            };
+            return true;
+        },
+    });
+    const result = await popup.show();
+
+    if (result === CLEAR) {
+        delete styles[plainPath];
+        addLog('info', `Cleared the style for ${prettyPath(plainPath)}.`);
+    } else if (result === (c.POPUP_RESULT?.AFFIRMATIVE ?? 1) && captured) {
+        if (!captured.length && !captured.note) delete styles[plainPath];
+        else styles[plainPath] = { length: captured.length, note: captured.note };
+        addLog('info', `Set the style for ${prettyPath(plainPath)}${styleText(styles[plainPath]) ? `: ${styleText(styles[plainPath])}` : ' (cleared)'}.`);
+    } else {
+        return;
+    }
+    save();
+    renderStyleList();
+    if (ui) renderAll();
+    if (result !== CLEAR && captured?.apply && styles[plainPath]) await runRestyle(plainPath);
+}
+
+/**
+ * Rewrites styled field values to fit their style, keeping their content. Locked and empty fields
+ * are left alone. `scope` limits it to one plain path (a field or group); without it, every styled field.
+ */
+async function runRestyle(scope = '') {
+    if (isBusy()) return;
+    const v = currentVersion();
+    const { doc } = parseXml(v?.xml);
+    if (!doc) return toastr.info('Nothing to restyle yet.');
+    const locks = new Set(session().locks);
+    const targets = collectLeaves(doc.documentElement)
+        .map(leaf => ({ ...leaf, plain: plainOf(leaf.path), value: leaf.el.textContent.trim() }))
+        .filter(t => t.value && !locks.has(t.path))
+        .filter(t => !scope || t.plain === scope || t.plain.startsWith(`${scope}/`))
+        .map(t => ({ ...t, style: styleText(styleFor(t.plain)?.style) }))
+        .filter(t => t.style);
+    if (!targets.length) return toastr.info(scope ? 'No unlocked, filled-in fields to restyle there.' : 'No fields have a style yet. Use the sliders button on a field or group to set one.');
+
+    setBusy(true, `Restyling ${targets.length} field${targets.length === 1 ? '' : 's'}…`);
+    try {
+        const reply = await callModel(buildRestyleMessages(targets));
+        const byPath = new Map(targets.map(t => [t.path, t]));
+        let changed = 0;
+        for (const [, path, value] of String(reply).matchAll(/<field path="([^"]+)"[^>]*>([\s\S]*?)<\/field>/g)) {
+            const target = byPath.get(path);
+            const clean = extractFieldValue(value, target?.el.tagName ?? 'field');
+            if (!target || !clean || clean === target.value) continue;
+            target.el.textContent = clean;
+            changed++;
+        }
+        if (!changed) {
+            addLog('ai', 'Restyle: everything already fits its style.');
+        } else {
+            const n = pushVersion(serialize(doc.documentElement), `Restyled ${changed} field${changed === 1 ? '' : 's'}`);
+            addLog('ai', `Restyled ${changed} field${changed === 1 ? '' : 's'}${scope ? ` in ${prettyPath(scope)}` : ''}.`, n);
+        }
+    } catch (err) {
+        reportError(err);
+    } finally {
+        setBusy(false);
+        if (ui) renderAll();
+    }
+}
+
 function reportError(err) {
     if (err?.name === 'AbortError' || /cancel|abort/i.test(String(err?.message))) {
         addLog('info', 'Cancelled.');
@@ -1130,6 +1316,7 @@ function bindForge() {
 
     ui.find('#pf-generate').on('click', runGenerate);
     ui.find('#pf-apply').on('click', runRefine);
+    ui.find('#pf-restyle').on('click', () => runRestyle());
     ui.find('#pf-cancel').on('click', cancelGeneration);
     ui.find('#pf-refine').on('keydown', (e) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runRefine(); }
@@ -1206,6 +1393,10 @@ function bindForge() {
     fields.on('click', '.pf-remove-field', function() {
         if (isBusy()) return;
         removeField(String($(this).closest('.pf-field, .pf-group').attr('data-path')));
+    });
+    fields.on('click', '.pf-style', function() {
+        if (isBusy()) return;
+        editStyle(String($(this).attr('data-plain')), $(this).closest('.pf-group-title').length > 0);
     });
     fields.on('click', '.pf-reroll-section', async function(e) {
         if (isBusy()) return;
@@ -1304,6 +1495,13 @@ function settingsHtml() {
             <label for="pf-example">Example persona (optional)</label>
             <textarea id="pf-example" class="text_pole pf-settings-area" rows="6" spellcheck="false"
                 placeholder="Paste a finished persona to show the model the depth and tone you want."></textarea>
+
+            <div class="pf-settings-head">
+                <label>Field styles</label>
+                <div id="pf-reset-styles" class="menu_button fa-solid fa-rotate-left" title="Restore the default field styles"></div>
+            </div>
+            <div id="pf-style-list" class="pf-style-list"></div>
+            <small>Set these with the sliders button on a field or group in the Forge.</small>
         </div>
     </div>
 </div>`;
@@ -1348,6 +1546,33 @@ function bindSettings() {
     $('#pf-reset-template').on('click', () => { s.template = DEFAULT_TEMPLATE; $('#pf-template').val(s.template); save(); });
     $('#pf-reset-system').on('click', () => { s.systemPrompt = DEFAULT_SYSTEM_PROMPT; $('#pf-system').val(s.systemPrompt); save(); });
     $('#pf-open-settings').on('click', openForge);
+
+    renderStyleList();
+    $('#pf-style-list').on('click', '.pf-style-delete', function() {
+        delete s.fieldStyles[String($(this).attr('data-plain'))];
+        save();
+        renderStyleList();
+        if (ui) renderFields();
+    });
+    $('#pf-reset-styles').on('click', () => {
+        s.fieldStyles = structuredClone(DEFAULT_FIELD_STYLES);
+        save();
+        renderStyleList();
+        if (ui) renderFields();
+    });
+}
+
+function renderStyleList() {
+    const list = $('#pf-style-list').empty();
+    const entries = Object.entries(settings().fieldStyles);
+    if (!entries.length) return list.append('<div class="pf-style-empty">No field styles.</div>');
+    for (const [path, style] of entries) {
+        const row = $('<div class="pf-style-row"><b></b><span></span><i class="fa-solid fa-xmark pf-style-delete" title="Remove this style"></i></div>');
+        row.find('b').text(prettyPath(path));
+        row.find('span').text(styleText(style));
+        row.find('i').attr('data-plain', path);
+        list.append(row);
+    }
 }
 
 // ----------------------------------------------------------------------------- entry points
