@@ -100,6 +100,110 @@ const DEFAULT_FIELD_STYLES = {
     'misc_attributes/scent/scent_hint': { length: 'terse', note: 'Like a candle scent name, e.g. "smoky vanilla", "black cardamom".' },
 };
 
+// Avatar prompt shot settings. Values are phrases handed to the model; the first choice of each is "AI's choice".
+// Choices flagged nsfw only appear with the NSFW toggle on.
+const AVATAR_FIELDS = [
+    { key: 'framing', label: 'Framing', choices: [
+        ['close-up of the face', 'Close-up (face)'],
+        ['head-and-shoulders portrait', 'Portrait (head and shoulders)'],
+        ['upper body, from the waist up', 'Upper body'],
+        ['from the thighs up (cowboy shot)', 'Thighs up (cowboy shot)'],
+        ['full body, head to toe', 'Full body'],
+    ] },
+    { key: 'angle', label: 'Camera angle', choices: [
+        ['eye level, facing the camera', 'Eye level'],
+        ['three-quarter view', 'Three-quarter view'],
+        ['side profile', 'Side profile'],
+        ['slightly from above', 'From above'],
+        ['from below, low angle', 'From below'],
+        ['from behind, looking back over the shoulder', 'From behind, looking back'],
+        ['point of view, as if the viewer is with them', 'POV'],
+    ] },
+    { key: 'pose', label: 'Pose / activity', choices: [
+        ['standing relaxed', 'Standing, relaxed'],
+        ['standing with arms crossed', 'Arms crossed'],
+        ['hand on hip', 'Hand on hip'],
+        ['leaning against a wall', 'Leaning against a wall'],
+        ['sitting in a chair', 'Sitting in a chair'],
+        ['sitting on the floor', 'Sitting on the floor'],
+        ['walking toward the camera', 'Walking'],
+        ['lying on a bed', 'Lying on a bed'],
+        ['taking a mirror selfie', 'Mirror selfie'],
+        ['holding a drink', 'Holding a drink'],
+        ['at work, doing their job', 'At work'],
+        ['stretching', 'Stretching'],
+        ['posing seductively', 'Posing seductively', true],
+        ['kneeling on a bed', 'Kneeling on a bed', true],
+        ['lying back on a bed, inviting', 'Lying back, inviting', true],
+    ] },
+    { key: 'expression', label: 'Expression', choices: [
+        ['neutral expression', 'Neutral'],
+        ['warm smile', 'Smiling'],
+        ['laughing', 'Laughing'],
+        ['smirking', 'Smirking'],
+        ['serious, intense look', 'Serious'],
+        ['shy, blushing', 'Shy / blushing'],
+        ['flirty look', 'Flirty'],
+        ['tired', 'Tired'],
+        ['surprised', 'Surprised'],
+        ['aroused, flushed, lips parted', 'Aroused', true],
+    ] },
+    { key: 'outfit', label: 'Outfit', choices: [
+        ['what this character typically wears day to day', 'Their usual clothes'],
+        ['casual clothes', 'Casual'],
+        ['work clothes or uniform', 'Work clothes / uniform'],
+        ['formal wear', 'Formal'],
+        ['athletic wear', 'Athletic'],
+        ['loungewear or pajamas', 'Loungewear / pajamas'],
+        ['swimwear', 'Swimwear'],
+        ['lingerie or underwear', 'Lingerie / underwear', true],
+        ['partially undressed', 'Partially undressed', true],
+        ['topless', 'Topless', true],
+        ['fully nude', 'Nude', true],
+    ] },
+    { key: 'setting', label: 'Setting', choices: [
+        ['plain studio backdrop', 'Studio backdrop'],
+        ['simple solid-colour background', 'Simple background'],
+        ['their bedroom', 'Bedroom'],
+        ['their home', 'At home'],
+        ['their workplace', 'Workplace'],
+        ['a city street', 'City street'],
+        ['a café or bar', 'Café / bar'],
+        ['a nightclub', 'Nightclub'],
+        ['a park or the countryside', 'Park / nature'],
+        ['a beach', 'Beach'],
+        ['a gym', 'Gym'],
+        ['inside a car', 'In a car'],
+    ] },
+    { key: 'lighting', label: 'Lighting', choices: [
+        ['soft natural daylight', 'Natural daylight'],
+        ['golden hour sunlight', 'Golden hour'],
+        ['soft studio lighting', 'Studio'],
+        ['dramatic low-key lighting', 'Dramatic'],
+        ['neon city lights at night', 'Neon night'],
+        ['warm lamplight or candlelight', 'Lamplight / candlelight'],
+        ['harsh on-camera flash', 'Camera flash'],
+    ] },
+    { key: 'photoStyle', label: 'Photo style (Krea)', choices: [
+        ['photorealistic portrait photography', 'Photorealistic'],
+        ['cinematic film still', 'Cinematic still'],
+        ['candid amateur phone photo', 'Candid phone photo'],
+        ['editorial fashion photograph', 'Editorial / fashion'],
+        ['vintage 35mm film photograph', 'Vintage 35mm film'],
+    ] },
+];
+
+const DEFAULT_AVATAR_OPTIONS = Object.freeze({
+    krea: true,
+    booru: true,
+    nsfw: false,
+    notes: '',
+    ...Object.fromEntries(AVATAR_FIELDS.map(f => [f.key, ''])), // '' = AI's choice
+});
+
+const DEFAULT_BOORU_NEGATIVE = 'low_quality, worst_quality, bad_anatomy, bad_hands, text, error, missing_fingers, extra_digit, fewer_digits, cropped, jpeg_artifacts, signature, watermark, username, blurry, artist_name, out_of_focus, ugly, duplicate, morbid, mutilated, extra_fingers, mutated_hands, poorly_drawn_hands, poorly_drawn_face, mutation, deformed, bad_proportions, gross_proportions';
+const DEFAULT_KREA_NEGATIVE = 'blurry, out of focus, low quality, jpeg artifacts, deformed hands, extra fingers, missing fingers, distorted face, bad anatomy, watermark, text, signature, cartoon, 3d render, plastic-looking skin';
+
 const defaultSettings = Object.freeze({
     profileId: '',
     maxTokens: 3000,
@@ -109,6 +213,11 @@ const defaultSettings = Object.freeze({
     renameRoot: true,
     historyLimit: 30,
     fieldStyles: DEFAULT_FIELD_STYLES,
+    avatarOptions: DEFAULT_AVATAR_OPTIONS,
+    booruUnderscores: true,
+    booruQuality: 'masterpiece, best_quality, high_resolution',
+    booruNegative: DEFAULT_BOORU_NEGATIVE,
+    kreaNegative: DEFAULT_KREA_NEGATIVE,
     session: null,
 });
 
@@ -119,6 +228,7 @@ const emptySession = () => ({
     locks: [], // field paths
     log: [], // { type: 'user'|'ai'|'error'|'info', text, v }
     targetAvatar: '',
+    avatarPrompts: null, // { krea?: { positive, negative }, booru?: { positive, negative }, v }
 });
 
 /** @type {import('../../../st-context.js').SillyTavernContext} */
@@ -545,6 +655,120 @@ function buildRestyleMessages(targets) {
     ];
 }
 
+// ----------------------------------------------------------------------------- avatar prompts
+
+/** The saved shot options, with any newly added keys filled in place (the Avatar form holds this same object). */
+function avatarOptions() {
+    const options = settings().avatarOptions;
+    for (const [key, value] of Object.entries(DEFAULT_AVATAR_OPTIONS)) {
+        if (options[key] === undefined) options[key] = value;
+    }
+    return options;
+}
+
+function buildAvatarMessages(opts) {
+    const underscores = settings().booruUnderscores;
+    const rating = opts.nsfw
+        ? 'This image may be NSFW. Nudity and sexual content are allowed where the outfit, pose or notes call for it; describe the body and anatomy plainly and faithfully to the profile. If nothing calls for it, keep it tasteful.'
+        : 'This image must be safe for work: the character is clothed, with no nudity and nothing sexual.';
+    const shot = AVATAR_FIELDS
+        .filter(f => f.key !== 'photoStyle' || opts.krea)
+        .map(f => `- ${f.label.replace(/ \(Krea\)$/, '')}: ${opts[f.key] || "AI's choice"}`);
+    if (opts.notes.trim()) shot.push(`- Extra notes: ${opts.notes.trim()}`);
+
+    const specs = [];
+    const blocks = [];
+    if (opts.krea) {
+        specs.push('Krea 2 prompt, in <krea_positive>: one flowing paragraph of natural language, about 120 to 200 words, in this order: '
+            + 'the subject (apparent age, ethnicity, build) and the framing; pose and placement in the frame; outfit; hair, face and distinguishing features; '
+            + 'expression and gaze; setting and background; lighting; camera and lens; photographic style and colour grading. '
+            + 'Concrete visual words, no metaphors, no names, no lists.');
+        specs.push('Krea 2 negative, in <krea_negative>: a short comma-separated list of things that would be wrong for this particular image '
+            + '(for example the wrong hair length or colour, a beard on a clean-shaven face, tattoos the character does not have). '
+            + 'Leave out generic quality terms; those are added separately.');
+        blocks.push('<krea_positive>…</krea_positive>', '<krea_negative>…</krea_negative>');
+    }
+    if (opts.booru) {
+        const form = underscores ? 'with words joined by underscores (long_hair, blue_eyes)' : 'with words separated by spaces (long hair, blue eyes)';
+        specs.push(`Booru tags, in <booru_positive>: 25 to 45 comma-separated Danbooru tags ${form}, in this order: `
+            + 'subject count (1girl, 1boy or 1other); hair; eyes; skin and body; distinguishing features; outfit; expression; pose; framing and angle; background; lighting. '
+            + 'Real Danbooru tags only. No sentences, and no quality or score tags; those are added separately.');
+        specs.push('Booru negative, in <booru_negative>: Danbooru tags for things that would be wrong for this particular image '
+            + `(for example ${underscores ? 'long_hair' : 'long hair'} for a crew cut, ${underscores ? 'facial_hair' : 'facial hair'} for a clean-shaven face). No generic quality tags.`);
+        blocks.push('<booru_positive>…</booru_positive>', '<booru_negative>…</booru_negative>');
+    }
+
+    const system = [
+        'You write prompts for image generation models from a character profile.',
+        '- Describe only what a camera would see. Turn the profile into appearance: apparent age, ethnicity and skin tone, build, hair, eyes, face and distinguishing marks; let personality show only through expression and posture. Leave out names, backstory, scent, voice and anything invisible.',
+        '- Keep every physical detail faithful to the profile.',
+        '- Follow each shot setting exactly. Where a setting is "AI\'s choice", pick what best suits the character.',
+        `- ${rating}`,
+    ].join('\n');
+    const user = [
+        `<character_profile>\n${currentXml()}\n</character_profile>`,
+        `Shot settings:\n${shot.join('\n')}`,
+        `Write:\n${specs.map(s => `- ${s}`).join('\n')}`,
+        `Output exactly these blocks and nothing else:\n${blocks.join('\n')}`,
+    ].join('\n\n');
+    return [{ role: 'system', content: system }, { role: 'user', content: user }];
+}
+
+const splitList = (text) => String(text ?? '').split(/[,\n]/).map(t => t.trim()).filter(Boolean);
+
+/** Joins comma lists, dropping repeats (long_hair and long hair count as the same tag). */
+function mergeList(lists, formatTag = t => t) {
+    const seen = new Set();
+    const out = [];
+    for (const item of lists.flatMap(splitList).map(formatTag)) {
+        const key = item.toLowerCase().replace(/[_\s]+/g, ' ');
+        if (!seen.has(key)) {
+            seen.add(key);
+            out.push(item);
+        }
+    }
+    return out.join(', ');
+}
+
+function booruTag(tag) {
+    // Leave weighted or escaped tags like (smile:1.2) alone apart from the separator.
+    return settings().booruUnderscores ? tag.replace(/\s+/g, '_') : tag.replace(/_/g, ' ');
+}
+
+const SFW_BOORU_NEGATIVE = 'nsfw, nude, nipples, pussy, penis, sex';
+const SFW_KREA_NEGATIVE = 'nudity, nsfw, exposed breasts, genitals';
+
+/** Turns the model's reply into final prompts: the model's part merged with the fixed parts from settings. */
+function finalizeAvatarPrompts(reply, opts) {
+    const s = settings();
+    const text = String(reply).replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, '');
+    const block = (name) => text.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1].trim() ?? null;
+    const result = {};
+    const missing = [];
+
+    if (opts.krea) {
+        const positive = block('krea_positive');
+        if (!positive) missing.push('Krea 2');
+        else {
+            result.krea = {
+                positive: positive.replace(/\s*\n+\s*/g, ' '),
+                negative: mergeList([block('krea_negative'), s.kreaNegative, opts.nsfw ? '' : SFW_KREA_NEGATIVE]),
+            };
+        }
+    }
+    if (opts.booru) {
+        const positive = block('booru_positive');
+        if (!positive) missing.push('booru');
+        else {
+            result.booru = {
+                positive: mergeList([s.booruQuality, positive], booruTag),
+                negative: mergeList([block('booru_negative'), s.booruNegative, opts.nsfw ? '' : SFW_BOORU_NEGATIVE], booruTag),
+            };
+        }
+    }
+    return { result, missing };
+}
+
 let activeAbort = null;
 
 async function callModel(messages) {
@@ -688,6 +912,7 @@ function forgeHtml() {
             <div class="pf-tabs">
                 <div class="pf-tab active" data-tab="fields">Fields</div>
                 <div class="pf-tab" data-tab="xml">XML</div>
+                <div class="pf-tab" data-tab="avatar" title="Write image-generation prompts for this persona">Avatar</div>
             </div>
             <div class="pf-versions">
                 <div id="pf-prev" class="menu_button fa-solid fa-chevron-left" title="Previous version"></div>
@@ -698,6 +923,7 @@ function forgeHtml() {
         </div>
         <div id="pf-fields" class="pf-pane"></div>
         <textarea id="pf-xml" class="text_pole pf-pane pf-xml pf-hidden" spellcheck="false"></textarea>
+        <div id="pf-avatar" class="pf-pane pf-avatar pf-hidden"></div>
         <div class="pf-footer">
             <select id="pf-persona-select" class="text_pole pf-persona-select" title="Existing persona to load from or save to"></select>
             <div id="pf-load" class="menu_button menu_button_icon" title="Load the selected persona's description as a new version">
@@ -719,7 +945,7 @@ function forgeHtml() {
 
 function setBusy(busy, label = '') {
     if (!ui) return;
-    ui.find('#pf-generate, #pf-apply, #pf-load, #pf-update, #pf-create, #pf-new-session, .pf-reroll, .pf-reroll-section, .pf-add-field, .pf-remove-field, #pf-restyle, .pf-style').toggleClass('disabled', busy);
+    ui.find('#pf-generate, #pf-apply, #pf-load, #pf-update, #pf-create, #pf-new-session, .pf-reroll, .pf-reroll-section, .pf-add-field, .pf-remove-field, #pf-restyle, .pf-style, #pf-avatar-generate').toggleClass('disabled', busy);
     ui.find('#pf-cancel').toggleClass('pf-hidden', !busy);
     ui.find('#pf-status').html(busy ? `<i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(label)}` : '');
     ui.toggleClass('pf-busy', busy);
@@ -733,6 +959,7 @@ function renderAll() {
     renderFields();
     ui.find('#pf-xml').val(currentXml());
     renderPersonaSelect();
+    renderAvatarResults();
 }
 
 function renderVersionBar() {
@@ -759,6 +986,155 @@ function updateTokenCount() {
             ui?.find('#pf-tokens').text('');
         }
     }, 300);
+}
+
+const KREA_CFG_NOTE = 'Krea 2 Turbo runs at CFG 1, where ComfyUI ignores the negative prompt. It only applies if you raise CFG.';
+
+/** Builds the Avatar tab's form (once per window) and binds it to the saved options. */
+function buildAvatarPane() {
+    const opts = avatarOptions();
+    const pane = ui.find('#pf-avatar').empty();
+    const form = $(`
+        <div class="pf-avatar-form">
+            <div class="pf-avatar-toggles">
+                <label class="checkbox_label"><input type="checkbox" data-opt="krea"> Krea 2 (natural language)</label>
+                <label class="checkbox_label"><input type="checkbox" data-opt="booru"> Booru tags</label>
+                <label class="checkbox_label pf-nsfw-toggle" title="Allows nudity and sexual content, and unlocks the NSFW choices below"><input type="checkbox" data-opt="nsfw"> NSFW</label>
+            </div>
+            <div class="pf-avatar-grid"></div>
+            <label class="pf-avatar-notes">Extra details (optional)
+                <input type="text" class="text_pole" data-opt="notes" placeholder="e.g. holding a coffee, rain on the window, wearing his old firefighter jacket">
+            </label>
+            <div class="pf-row">
+                <div id="pf-avatar-generate" class="menu_button menu_button_icon" title="Write image prompts for the version you're viewing">
+                    <i class="fa-solid fa-camera"></i><span>Write prompts</span>
+                </div>
+                <small class="pf-avatar-hint">Uses the version you're viewing. Fixed tags and base negatives are in the extension settings.</small>
+            </div>
+        </div>
+        <div class="pf-avatar-results"></div>`);
+
+    const grid = form.find('.pf-avatar-grid');
+    for (const field of AVATAR_FIELDS) {
+        const select = $(`<select class="text_pole" data-opt="${field.key}"><option value="">AI's choice</option></select>`);
+        for (const [value, label, nsfw] of field.choices) {
+            select.append($('<option></option>').val(value).text(nsfw ? `${label} (NSFW)` : label).attr('data-nsfw', nsfw ? '1' : null));
+        }
+        grid.append($('<label class="pf-avatar-field"></label>').text(field.label).append(select));
+    }
+    pane.append(form);
+
+    const syncNsfw = () => {
+        form.find('option[data-nsfw]').prop('hidden', !opts.nsfw).prop('disabled', !opts.nsfw);
+        for (const field of AVATAR_FIELDS) {
+            const chosen = field.choices.find(([value]) => value === opts[field.key]);
+            if (chosen?.[2] && !opts.nsfw) opts[field.key] = '';
+        }
+        form.find('[data-opt="photoStyle"]').prop('disabled', !opts.krea);
+        form.find('[data-opt]').each(function() {
+            const key = $(this).attr('data-opt');
+            if (this.type === 'checkbox') $(this).prop('checked', !!opts[key]);
+            else $(this).val(opts[key] ?? '');
+        });
+    };
+    syncNsfw();
+
+    form.on('change input', '[data-opt]', function(e) {
+        const key = $(this).attr('data-opt');
+        if (this.type === 'checkbox') {
+            if (e.type !== 'change') return;
+            opts[key] = $(this).prop('checked');
+            if ((key === 'krea' || key === 'booru') && !opts.krea && !opts.booru) {
+                opts[key] = true;
+                toastr.info('Pick at least one prompt format.');
+            }
+        } else {
+            opts[key] = String($(this).val() ?? '');
+        }
+        if (this.type === 'checkbox') syncNsfw();
+        save();
+    });
+    form.find('#pf-avatar-generate').on('click', runAvatarPrompts);
+
+    const results = pane.find('.pf-avatar-results');
+    results.on('click', '.pf-copy-out', async function() {
+        const text = String($(this).closest('.pf-avatar-out').find('textarea').val() || '');
+        if (!text) return;
+        await navigator.clipboard.writeText(text);
+        toastr.success('Copied to clipboard.');
+    });
+    results.on('input', 'textarea', function() {
+        const format = $(this).closest('.pf-avatar-result').attr('data-format');
+        const part = $(this).attr('data-part');
+        const prompts = session().avatarPrompts;
+        if (prompts?.[format]) {
+            prompts[format][part] = String($(this).val());
+            save();
+        }
+    });
+}
+
+function renderAvatarResults() {
+    const box = ui?.find('.pf-avatar-results').empty();
+    if (!box?.length) return;
+    const prompts = session().avatarPrompts;
+    if (!prompts || (!prompts.krea && !prompts.booru)) {
+        box.append('<div class="pf-empty">Pick the shot, then <b>Write prompts</b>. The AI turns the persona\'s looks into prompts for Krea 2 and booru-tag models.</div>');
+        return;
+    }
+    if (prompts.vts && prompts.vts !== currentVersion()?.ts) {
+        box.append('<div class="pf-avatar-stale"><i class="fa-solid fa-circle-info"></i> These prompts were written for a different version than the one you\'re viewing.</div>');
+    }
+    const formats = [['krea', 'Krea 2', KREA_CFG_NOTE], ['booru', 'Booru tags', '']];
+    for (const [format, title, negativeNote] of formats) {
+        const data = prompts[format];
+        if (!data) continue;
+        const block = $(`
+            <div class="pf-avatar-result" data-format="${format}">
+                <div class="pf-avatar-result-head">${escapeHtml(title)}</div>
+                <div class="pf-avatar-out">
+                    <div class="pf-avatar-out-head"><span>Positive</span><i class="fa-solid fa-copy pf-copy-out" title="Copy"></i></div>
+                    <textarea class="text_pole" data-part="positive" rows="${format === 'krea' ? 7 : 5}"></textarea>
+                </div>
+                <div class="pf-avatar-out">
+                    <div class="pf-avatar-out-head"><span>Negative</span><i class="fa-solid fa-copy pf-copy-out" title="Copy"></i></div>
+                    <textarea class="text_pole" data-part="negative" rows="3"></textarea>
+                    ${negativeNote ? `<small class="pf-avatar-note">${escapeHtml(negativeNote)}</small>` : ''}
+                </div>
+            </div>`);
+        block.find('[data-part="positive"]').val(data.positive);
+        block.find('[data-part="negative"]').val(data.negative);
+        box.append(block);
+    }
+}
+
+async function runAvatarPrompts() {
+    if (isBusy()) return;
+    if (!currentXml()) return toastr.info('Generate or load a persona first.');
+    const opts = avatarOptions();
+    if (!opts.krea && !opts.booru) return toastr.info('Pick at least one prompt format.');
+
+    setBusy(true, 'Writing image prompts…');
+    try {
+        const reply = await callModel(buildAvatarMessages(opts));
+        const { result, missing } = finalizeAvatarPrompts(reply, opts);
+        if (!result.krea && !result.booru) {
+            throw new Error('The reply didn\'t contain the prompt blocks. Try again, or raise Max response tokens.');
+        }
+        const s = session();
+        s.avatarPrompts = { ...result, vts: currentVersion()?.ts };
+        save();
+        const names = [result.krea && 'Krea 2', result.booru && 'booru'].filter(Boolean).join(' and ');
+        addLog('ai', `Wrote ${names} avatar prompts for v${s.index + 1}.${missing.length ? ` The ${missing.join(' and ')} prompt was missing from the reply.` : ''}`);
+    } catch (err) {
+        reportError(err);
+    } finally {
+        setBusy(false);
+        if (ui) {
+            renderLog();
+            renderAvatarResults();
+        }
+    }
 }
 
 function renderLog() {
@@ -1345,7 +1721,9 @@ function bindForge() {
         $(this).addClass('active');
         ui.find('#pf-fields').toggleClass('pf-hidden', tab !== 'fields');
         ui.find('#pf-xml').toggleClass('pf-hidden', tab !== 'xml');
+        ui.find('#pf-avatar').toggleClass('pf-hidden', tab !== 'avatar');
         if (tab === 'fields') renderFields();
+        if (tab === 'avatar') renderAvatarResults();
     });
 
     ui.find('#pf-xml').on('input', function() {
@@ -1432,6 +1810,7 @@ async function openForge() {
     await loadPersonasModule();
     ui = $(forgeHtml());
     bindForge();
+    buildAvatarPane();
     renderAll();
     const popup = new c.Popup(ui, c.POPUP_TYPE.TEXT, '', {
         wide: true,
@@ -1502,6 +1881,22 @@ function settingsHtml() {
             </div>
             <div id="pf-style-list" class="pf-style-list"></div>
             <small>Set these with the sliders button on a field or group in the Forge.</small>
+
+            <div class="pf-settings-head">
+                <b>Avatar prompts</b>
+                <div id="pf-reset-avatar" class="menu_button fa-solid fa-rotate-left" title="Restore the default avatar prompt settings"></div>
+            </div>
+            <label class="checkbox_label" for="pf-booru-underscores">
+                <input id="pf-booru-underscores" type="checkbox">
+                <span>Booru tags use underscores (long_hair, not long hair)</span>
+            </label>
+            <label for="pf-booru-quality">Booru quality tags (put first)</label>
+            <input id="pf-booru-quality" class="text_pole" type="text">
+            <label for="pf-booru-negative">Booru base negative</label>
+            <textarea id="pf-booru-negative" class="text_pole pf-settings-area" rows="4"></textarea>
+            <label for="pf-krea-negative">Krea 2 base negative</label>
+            <textarea id="pf-krea-negative" class="text_pole pf-settings-area" rows="3"></textarea>
+            <small>The AI adds negatives specific to the persona; these are merged in after. With NSFW off, nudity terms are added too.</small>
         </div>
     </div>
 </div>`;
@@ -1542,6 +1937,21 @@ function bindSettings() {
     bindArea('#pf-template', 'template');
     bindArea('#pf-system', 'systemPrompt');
     bindArea('#pf-example', 'example');
+    bindArea('#pf-booru-quality', 'booruQuality');
+    bindArea('#pf-booru-negative', 'booruNegative');
+    bindArea('#pf-krea-negative', 'kreaNegative');
+    $('#pf-booru-underscores').prop('checked', s.booruUnderscores).on('change', function() {
+        s.booruUnderscores = $(this).prop('checked');
+        save();
+    });
+    $('#pf-reset-avatar').on('click', () => {
+        for (const key of ['booruUnderscores', 'booruQuality', 'booruNegative', 'kreaNegative']) s[key] = defaultSettings[key];
+        $('#pf-booru-underscores').prop('checked', s.booruUnderscores);
+        $('#pf-booru-quality').val(s.booruQuality);
+        $('#pf-booru-negative').val(s.booruNegative);
+        $('#pf-krea-negative').val(s.kreaNegative);
+        save();
+    });
 
     $('#pf-reset-template').on('click', () => { s.template = DEFAULT_TEMPLATE; $('#pf-template').val(s.template); save(); });
     $('#pf-reset-system').on('click', () => { s.systemPrompt = DEFAULT_SYSTEM_PROMPT; $('#pf-system').val(s.systemPrompt); save(); });

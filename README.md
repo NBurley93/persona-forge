@@ -39,6 +39,21 @@ SillyTavern/data/default-user/extensions/persona-forge/
 
 The session (concept, versions, locks, log) is saved, so closing the window doesn't lose work.
 
+## Avatar prompts
+
+The **Avatar** tab turns the persona's looks into image-generation prompts, for **Krea 2** (a natural-language
+paragraph) and **booru-tag** models such as Anima, each with a positive and a negative prompt.
+
+- Pick the shot from dropdowns: framing, camera angle, pose, expression, outfit, setting, lighting and (for Krea)
+  photo style. Anything left on *AI's choice* is picked to suit the character. Add free-text extra details if you like.
+- **NSFW** allows nudity and unlocks the NSFW choices. With it off, the prompt is kept clothed and nudity terms are
+  added to both negatives.
+- The AI writes the persona-specific parts, including negatives for things that would be wrong for this
+  character, like "long hair" for a crew cut. Your fixed quality tags and base negatives from the settings are merged
+  in, and duplicates are dropped.
+- Krea 2 Turbo runs at CFG 1, where ComfyUI ignores negative prompts, so the Krea negative only matters if you raise CFG.
+- Prompts are written for the version you're viewing, and you can edit them in place before copying.
+
 ## Settings (Extensions panel → Persona Forge)
 
 - **Connection profile**: design with a different model than the one you chat with (uses Connection Manager profiles).
@@ -49,4 +64,5 @@ The session (concept, versions, locks, log) is saved, so closing the window does
   new detail. Once a persona exists, its freeform sections take their shape from the persona rather than the template.
 - **Instructions**: the system prompt.
 - **Example persona**: paste a finished persona to show the model the depth and tone you want.
+- **Avatar prompts**: booru tags with underscores or spaces, the booru quality tags that lead every prompt, and the base negatives for booru and Krea 2.
 - **Field styles**: every style you've set, with the option to remove them. The default styles Scent Hints as terse candle-scent names.
