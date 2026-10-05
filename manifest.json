@@ -1,0 +1,12 @@
+{
+    "display_name": "Persona Forge",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "NBurley93",
+    "version": "0.1.0",
+    "homePage": "https://github.com/NBurley93/persona-forge",
+    "auto_update": false
+}

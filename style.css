@@ -1,0 +1,431 @@
+/* Persona Forge — follows the active SillyTavern theme via its SmartTheme variables. */
+
+.pf-dialog .popup-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.pf-root {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+    text-align: left;
+}
+
+.pf-left,
+.pf-right {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+}
+
+.pf-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pf-label {
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.pf-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.pf-row .menu_button,
+.pf-footer .menu_button {
+    margin: 0;
+}
+
+.pf-status {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.pf-hidden {
+    display: none !important;
+}
+
+.pf-concept {
+    resize: vertical;
+}
+
+/* Design log */
+.pf-log-section {
+    flex: 1;
+    min-height: 120px;
+}
+
+.pf-log {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 6px;
+    background: var(--black30a, rgba(0, 0, 0, 0.3));
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.92em;
+}
+
+.pf-log-empty {
+    opacity: 0.6;
+    font-style: italic;
+    padding: 4px;
+}
+
+.pf-log-entry {
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.pf-log-user {
+    align-self: flex-end;
+    background: var(--SmartThemeQuoteColor);
+    color: var(--SmartThemeBlurTintColor, #000);
+    max-width: 90%;
+}
+
+.pf-log-ai,
+.pf-log-info {
+    opacity: 0.85;
+}
+
+.pf-log-error {
+    color: var(--warning, #e57373);
+}
+
+.pf-log-link {
+    cursor: pointer;
+    text-decoration: underline;
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+/* Toolbar */
+.pf-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.pf-tabs {
+    display: flex;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.pf-tab {
+    padding: 4px 14px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.pf-tab.active {
+    opacity: 1;
+    background: var(--white20a, rgba(255, 255, 255, 0.2));
+    font-weight: 600;
+}
+
+.pf-versions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pf-versions .menu_button {
+    margin: 0;
+    padding: 4px 8px;
+}
+
+.pf-version-label {
+    min-width: 70px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-tokens {
+    margin-left: auto;
+    opacity: 0.6;
+    font-size: 0.9em;
+}
+
+/* Document panes */
+.pf-pane {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.pf-xml {
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.9em;
+    line-height: 1.4;
+    resize: none;
+    white-space: pre;
+    tab-size: 4;
+}
+
+.pf-empty {
+    opacity: 0.7;
+    padding: 24px;
+    text-align: center;
+}
+
+.pf-empty.pf-error {
+    color: var(--warning, #e57373);
+    opacity: 1;
+}
+
+.pf-group {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 6px 8px 8px;
+    margin-bottom: 8px;
+}
+
+.pf-depth-0 {
+    border: none;
+    padding: 0;
+}
+
+.pf-depth-0 > .pf-group-title {
+    font-size: 1.25em;
+}
+
+.pf-depth-2,
+.pf-depth-3 {
+    background: var(--black30a, rgba(0, 0, 0, 0.15));
+}
+
+.pf-group-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--SmartThemeEmColor);
+}
+
+.pf-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pf-badge {
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--SmartThemeQuoteColor);
+    color: var(--SmartThemeQuoteColor);
+}
+
+.pf-group-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 10px;
+    font-weight: normal;
+    color: var(--SmartThemeBodyColor);
+}
+
+.pf-group-actions i {
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.15s;
+}
+
+.pf-group-actions i:hover {
+    opacity: 1;
+}
+
+.pf-group-actions .pf-remove-field:hover {
+    color: var(--warning, #e57373);
+}
+
+.pf-group.pf-working > .pf-group-body {
+    opacity: 0.5;
+}
+
+.pf-group.pf-working > .pf-group-title .pf-reroll-section {
+    animation: pf-spin 0.8s linear infinite;
+    opacity: 1;
+}
+
+.pf-freeform.pf-depth-1 {
+    border-style: dashed;
+}
+
+.pf-field-actions .pf-remove-field:hover {
+    color: var(--warning, #e57373);
+}
+
+.pf-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pf-field {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.pf-field-label {
+    padding-top: 6px;
+    font-size: 0.92em;
+    opacity: 0.85;
+    overflow-wrap: anywhere;
+}
+
+.pf-field-input {
+    margin: 0;
+    resize: none;
+    overflow: hidden;
+    min-height: 2em;
+    line-height: 1.35;
+}
+
+.pf-field-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 7px;
+}
+
+.pf-field-actions i {
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.15s;
+}
+
+.pf-field-actions i:hover {
+    opacity: 1;
+}
+
+.pf-locked .pf-field-input {
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.pf-locked .pf-lock {
+    opacity: 1;
+    color: var(--SmartThemeQuoteColor);
+}
+
+.pf-working .pf-field-input {
+    opacity: 0.5;
+}
+
+.pf-working .pf-reroll {
+    animation: pf-spin 0.8s linear infinite;
+    opacity: 1;
+}
+
+@keyframes pf-spin {
+    to { transform: rotate(360deg); }
+}
+
+.pf-busy .disabled,
+.pf-busy .pf-reroll,
+.pf-busy .pf-reroll-section,
+.pf-busy .pf-add-field,
+.pf-busy .pf-remove-field {
+    pointer-events: none;
+    opacity: 0.4;
+}
+
+/* Footer */
+.pf-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+}
+
+.pf-persona-select {
+    width: auto;
+    max-width: 220px;
+    margin: 0;
+}
+
+.pf-spacer {
+    flex: 1;
+}
+
+.pf-avatar-pick {
+    margin-top: 8px;
+    text-align: left;
+}
+
+/* Settings drawer */
+.persona-forge-settings .inline-drawer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.persona-forge-settings small {
+    opacity: 0.7;
+}
+
+.pf-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pf-settings-head .menu_button {
+    margin: 0;
+    padding: 3px 8px;
+}
+
+.pf-settings-area {
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+    resize: vertical;
+}
+
+/* Phones: stack the panes */
+@media (max-width: 1000px) {
+    .pf-root {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+
+    .pf-log-section {
+        min-height: 100px;
+        max-height: 180px;
+    }
+
+    .pf-pane {
+        min-height: 50vh;
+    }
+
+    .pf-field {
+        grid-template-columns: 1fr auto;
+    }
+
+    .pf-field-label {
+        grid-column: 1 / -1;
+        padding-top: 0;
+    }
+}
