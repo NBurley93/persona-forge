@@ -229,6 +229,7 @@ const emptySession = () => ({
     log: [], // { type: 'user'|'ai'|'error'|'info', text, v }
     targetAvatar: '',
     avatarPrompts: null, // { krea?: { positive, negative }, booru?: { positive, negative }, v }
+    card: null, // { options, name, draft }
 });
 
 /** @type {import('../../../st-context.js').SillyTavernContext} */
@@ -769,6 +770,143 @@ function finalizeAvatarPrompts(reply, opts) {
     return { result, missing };
 }
 
+// ----------------------------------------------------------------------------- character cards
+
+const CARD_ERAS = [
+    ['present day', 'Present day'],
+    ['the near future', 'Near future'],
+    ['the far future', 'Far future'],
+    ['the 1950s', '1950s'],
+    ['the 1970s', '1970s'],
+    ['the 1980s', '1980s'],
+    ['the 1990s', '1990s'],
+    ['the 2000s', '2000s'],
+    ['the Victorian era', 'Victorian era'],
+    ['the Middle Ages', 'Middle Ages'],
+    ['a fantasy world', 'Fantasy world'],
+    ['a science-fiction setting', 'Science fiction'],
+    ['a post-apocalyptic world', 'Post-apocalyptic'],
+];
+
+const CARD_NARRATION = [
+    ['third person, past tense', 'Third person, past tense'],
+    ['third person, present tense', 'Third person, present tense'],
+    ['second person, addressing {{user}} as "you"', 'Second person ("you")'],
+    ['first person, as {{char}}', 'First person, as the character'],
+];
+
+const CARD_LENGTHS = {
+    short: ['one paragraph', 'Short: one paragraph'],
+    medium: ['two or three paragraphs', 'Medium: 2 or 3 paragraphs'],
+    long: ['four to six paragraphs', 'Long: 4 to 6 paragraphs'],
+};
+
+const CARD_FORMATS = {
+    asterisks: ['narration and actions in *asterisks*, speech in "quotes"', '*Actions* and "speech"'],
+    prose: ['plain novel-style prose, speech in "quotes"', 'Novel-style prose'],
+};
+
+const DEFAULT_CARD_OPTIONS = Object.freeze({
+    era: 'present day', // '' = AI's choice
+    year: '',
+    location: '',
+    premise: '',
+    opening: '',
+    narration: CARD_NARRATION[0][0],
+    length: 'medium',
+    format: 'asterisks',
+    greetings: [], // one scene prompt per alternate greeting ('' = AI's choice)
+    exampleDialogue: true,
+});
+
+function cardState() {
+    const s = session();
+    s.card ??= { options: structuredClone(DEFAULT_CARD_OPTIONS), name: '', draft: null };
+    for (const [key, value] of Object.entries(DEFAULT_CARD_OPTIONS)) {
+        if (s.card.options[key] === undefined) s.card.options[key] = structuredClone(value);
+    }
+    return s.card;
+}
+
+const CARD_SYSTEM = 'You turn a character profile into a SillyTavern character card for roleplay. '
+    + 'Write in character, vividly and concretely, consistent with every detail of the profile. '
+    + 'Refer to the character as {{char}} and to the person chatting with them as {{user}}. '
+    + 'Never decide what {{user}} looks like, says, does, thinks or feels.';
+
+function cardStyle(opts) {
+    return `${opts.narration}, ${CARD_LENGTHS[opts.length]?.[0] ?? CARD_LENGTHS.medium[0]}, with ${CARD_FORMATS[opts.format]?.[0] ?? CARD_FORMATS.asterisks[0]}`;
+}
+
+function buildCardMessages(opts, name) {
+    const settingsLines = [
+        `- Name: ${name}`,
+        `- Era: ${opts.era || "AI's choice"}`,
+        `- Starting year: ${opts.year.trim() || "AI's choice, fitting the era"}`,
+        `- Location: ${opts.location.trim() || "AI's choice"}`,
+        `- Premise: ${opts.premise.trim() || "AI's choice: an interesting reason for {{char}} and {{user}} to be together"}`,
+        `- Opening scene: ${opts.opening.trim() || "AI's choice, fitting the premise"}`,
+        `- Opening message style: ${cardStyle(opts)}`,
+    ];
+    const blocks = [
+        '- <scenario>: two to four sentences of background: when and where this takes place (including the era and year) and the situation between {{char}} and {{user}} as the chat begins. Background, not narration.',
+        '- <personality>: a 40 to 80 word summary of {{char}}\'s personality.',
+        `- <first_mes>: the chat's opening message, written as ${cardStyle(opts)}. Set the opening scene through narration and {{char}}'s words and actions, and end on a moment {{user}} can respond to.`,
+        opts.exampleDialogue
+            ? '- <mes_example>: two short example exchanges showing how {{char}} talks and acts. Start each with <START> on its own line, followed by alternating lines that begin "{{user}}:" and "{{char}}:".'
+            : '',
+        '- <tags>: 4 to 8 comma-separated lowercase tags (genre, setting, notable traits).',
+        '- <creator_notes>: one or two sentences describing the card for someone browsing a character list.',
+    ].filter(Boolean);
+    const user = [
+        `<character_profile>\n${currentXml()}\n</character_profile>`,
+        `Card settings:\n${settingsLines.join('\n')}`,
+        `Write these blocks:\n${blocks.join('\n')}`,
+        'Output exactly these blocks, each wrapped in its tags, and nothing else.',
+    ].join('\n\n');
+    return [{ role: 'system', content: CARD_SYSTEM }, { role: 'user', content: user }];
+}
+
+function buildGreetingMessages(opts, draft, scene) {
+    const earlier = [draft.first_mes, ...draft.alternate_greetings];
+    const user = [
+        `<character_profile>\n${currentXml()}\n</character_profile>`,
+        `<scenario>\n${draft.scenario}\n</scenario>`,
+        `The card's existing opening messages, for contrast only. Do not repeat their scenes or wording:\n${earlier.map(text => `<greeting>\n${text}\n</greeting>`).join('\n')}`,
+        `Write an alternate opening message for this starting scene:\n<scene>\n${scene.trim() || "AI's choice: a different starting scene that fits the scenario"}\n</scene>`,
+        `Write it as ${cardStyle(opts)}. The time and place may shift if the scene calls for it, but {{char}} is the same person. End on a moment {{user}} can respond to.`,
+        'Output only the new message, wrapped in <greeting></greeting>.',
+    ].join('\n\n');
+    return [{ role: 'system', content: CARD_SYSTEM }, { role: 'user', content: user }];
+}
+
+/** Pulls one tagged block out of a reply; reasoning blocks are ignored. */
+function replyBlock(reply, name) {
+    const text = String(reply).replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, '');
+    return text.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1].trim() ?? null;
+}
+
+function parseCardReply(reply, opts, name) {
+    const scenario = replyBlock(reply, 'scenario');
+    const firstMes = replyBlock(reply, 'first_mes');
+    if (!scenario || !firstMes) {
+        throw new Error('The reply was missing the scenario or the opening message. Try again, or raise Max response tokens.');
+    }
+    let example = opts.exampleDialogue ? (replyBlock(reply, 'mes_example') ?? '') : '';
+    if (example && !/^<START>/i.test(example)) example = `<START>\n${example}`;
+    return {
+        name,
+        description: currentXml(),
+        scenario,
+        personality: replyBlock(reply, 'personality') ?? '',
+        first_mes: firstMes,
+        mes_example: example,
+        tags: splitList(replyBlock(reply, 'tags') ?? '').map(t => t.toLowerCase()).join(', '),
+        creator_notes: replyBlock(reply, 'creator_notes') ?? '',
+        alternate_greetings: [],
+        vts: currentVersion()?.ts,
+    };
+}
+
 let activeAbort = null;
 
 async function callModel(messages) {
@@ -910,6 +1048,7 @@ function forgeHtml() {
     <div class="pf-right">
         <div class="pf-toolbar">
             <div class="pf-tabs">
+                <div class="pf-tab pf-tab-design" data-tab="design" title="Concept, design log and refinements">Design</div>
                 <div class="pf-tab active" data-tab="fields">Fields</div>
                 <div class="pf-tab" data-tab="xml">XML</div>
                 <div class="pf-tab" data-tab="avatar" title="Write image-generation prompts for this persona">Avatar</div>
@@ -938,14 +1077,39 @@ function forgeHtml() {
             <div id="pf-create" class="menu_button menu_button_icon" title="Create a new persona from this version">
                 <i class="fa-solid fa-user-plus"></i><span>Save as new persona</span>
             </div>
+            <div id="pf-card" class="menu_button menu_button_icon" title="Turn this persona into a character card, with a scenario and greetings written by the AI">
+                <i class="fa-solid fa-id-card"></i><span>Make card</span>
+            </div>
         </div>
     </div>
 </div>`;
 }
 
+// Phones and narrow windows (SillyTavern's own mobile breakpoint) show one pane at a time, with the
+// left column as a "Design" tab. The CSS keys off the same query.
+const mobileQuery = window.matchMedia('(max-width: 1000px)');
+let currentTab = 'fields';
+
+function setTab(tab) {
+    if (!ui) return;
+    if (tab === 'design' && !mobileQuery.matches) tab = 'fields';
+    currentTab = tab;
+    ui.attr('data-tab', tab);
+    ui.find('.pf-tab').removeClass('active').filter(`[data-tab="${tab}"]`).addClass('active');
+    ui.find('#pf-fields').toggleClass('pf-hidden', tab !== 'fields');
+    ui.find('#pf-xml').toggleClass('pf-hidden', tab !== 'xml');
+    ui.find('#pf-avatar').toggleClass('pf-hidden', tab !== 'avatar');
+    if (tab === 'fields') renderFields();
+    if (tab === 'avatar') renderAvatarResults();
+}
+
+function onViewportChange() {
+    if (ui && currentTab === 'design' && !mobileQuery.matches) setTab('fields');
+}
+
 function setBusy(busy, label = '') {
     if (!ui) return;
-    ui.find('#pf-generate, #pf-apply, #pf-load, #pf-update, #pf-create, #pf-new-session, .pf-reroll, .pf-reroll-section, .pf-add-field, .pf-remove-field, #pf-restyle, .pf-style, #pf-avatar-generate').toggleClass('disabled', busy);
+    ui.find('#pf-generate, #pf-apply, #pf-load, #pf-update, #pf-create, #pf-new-session, #pf-card, .pf-reroll, .pf-reroll-section, .pf-add-field, .pf-remove-field, #pf-restyle, .pf-style, #pf-avatar-generate').toggleClass('disabled', busy);
     ui.find('#pf-cancel').toggleClass('pf-hidden', !busy);
     ui.find('#pf-status').html(busy ? `<i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(label)}` : '');
     ui.toggleClass('pf-busy', busy);
@@ -1135,6 +1299,314 @@ async function runAvatarPrompts() {
             renderAvatarResults();
         }
     }
+}
+
+// ----------------------------------------------------------------------------- character card dialogs
+
+const selectOptions = (pairs, selected) => pairs
+    .map(([value, label]) => `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+    .join('');
+
+/** Step 1: ask for the scenario, the opening and any alternate greetings, then write the card. */
+async function openCardDialog() {
+    if (isBusy()) return;
+    if (!currentXml()) return toastr.info('Generate or load a persona first.');
+    const c = ctx();
+    const state = cardState();
+    const opts = state.options;
+    const { doc } = parseXml(currentXml());
+    const name = state.name || personaName(doc);
+
+    const form = $(`
+        <div class="pf-card-form">
+            <h3>Make a character card</h3>
+            <p class="pf-card-intro">Turns this persona into a standalone character. The AI writes the scenario, opening message and other card fields from your answers. You can review and edit everything before the card is created.</p>
+            <label>Card name <input class="text_pole" data-card="name" type="text"></label>
+            <fieldset>
+                <legend>Scenario</legend>
+                <div class="pf-card-grid">
+                    <label>Era <select class="text_pole" data-card="era"><option value="">AI's choice</option>${selectOptions(CARD_ERAS, opts.era)}</select></label>
+                    <label>Starting year <input class="text_pole" data-card="year" type="text" inputmode="numeric" placeholder="AI's choice"></label>
+                    <label>Location <input class="text_pole" data-card="location" type="text" placeholder="e.g. Chicago, Bridgeport"></label>
+                </div>
+                <label>Premise
+                    <textarea class="text_pole" data-card="premise" rows="3" placeholder="How do {{char}} and {{user}} know each other, and what's going on? e.g. {{user}} just moved into the apartment across the hall."></textarea>
+                </label>
+            </fieldset>
+            <fieldset>
+                <legend>Opening message</legend>
+                <label>Opening scene
+                    <textarea class="text_pole" data-card="opening" rows="3" placeholder="What's happening when the chat starts? e.g. {{char}} knocks on {{user}}'s door to borrow a ladder. Leave blank for the AI's choice."></textarea>
+                </label>
+                <div class="pf-card-grid">
+                    <label>Narration <select class="text_pole" data-card="narration">${selectOptions(CARD_NARRATION, opts.narration)}</select></label>
+                    <label>Length <select class="text_pole" data-card="length">${selectOptions(Object.entries(CARD_LENGTHS).map(([k, v]) => [k, v[1]]), opts.length)}</select></label>
+                    <label>Formatting <select class="text_pole" data-card="format">${selectOptions(Object.entries(CARD_FORMATS).map(([k, v]) => [k, v[1]]), opts.format)}</select></label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Alternate greetings</legend>
+                <p class="pf-card-note"><i class="fa-solid fa-clock"></i> Each alternate greeting is written in its own request, so every one you add makes the card take longer to generate.</p>
+                <div class="pf-card-greetings"></div>
+                <div class="menu_button menu_button_icon pf-card-add-greeting"><i class="fa-solid fa-plus"></i><span>Add alternate greeting</span></div>
+            </fieldset>
+            <label class="checkbox_label"><input type="checkbox" data-card="exampleDialogue"> Write example dialogue</label>
+            <p class="pf-card-estimate"></p>
+        </div>`);
+
+    form.find('[data-card="name"]').val(name);
+    for (const key of ['year', 'location', 'premise', 'opening']) form.find(`[data-card="${key}"]`).val(opts[key]);
+    form.find('[data-card="era"]').val(opts.era);
+    form.find('[data-card="exampleDialogue"]').prop('checked', opts.exampleDialogue);
+
+    const renderGreetings = () => {
+        const list = form.find('.pf-card-greetings').empty();
+        opts.greetings.forEach((scene, i) => {
+            const row = $(`<div class="pf-card-greeting">
+                <span class="pf-card-greeting-num">${i + 2}</span>
+                <textarea class="text_pole" rows="2" placeholder="Starting scene for this greeting, or leave blank for the AI's choice"></textarea>
+                <i class="fa-solid fa-xmark pf-card-remove-greeting" title="Remove this greeting"></i>
+            </div>`);
+            row.find('textarea').val(scene).on('input', function() { opts.greetings[i] = String($(this).val()); save(); });
+            row.find('.pf-card-remove-greeting').on('click', () => { opts.greetings.splice(i, 1); save(); renderGreetings(); });
+            list.append(row);
+        });
+        const requests = 1 + opts.greetings.length;
+        form.find('.pf-card-estimate').text(opts.greetings.length
+            ? `Greeting 1 is the opening message above. This card takes ${requests} requests: one for the card, plus one per alternate greeting.`
+            : 'This card takes one request.');
+    };
+    renderGreetings();
+    form.find('.pf-card-add-greeting').on('click', () => { opts.greetings.push(''); save(); renderGreetings(); form.find('.pf-card-greeting textarea').last().trigger('focus'); });
+
+    let cardName = name;
+    form.on('input change', '[data-card]', function() {
+        const key = $(this).attr('data-card');
+        const value = this.type === 'checkbox' ? $(this).prop('checked') : String($(this).val());
+        if (key === 'name') cardName = String(value).trim();
+        else opts[key] = value;
+        save();
+    });
+
+    const REVIEW = c.POPUP_RESULT?.CUSTOM1 ?? 1001;
+    const popup = new c.Popup(form, c.POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Write card',
+        cancelButton: 'Cancel',
+        wide: true,
+        allowVerticalScrolling: true,
+        customButtons: state.draft ? [{ text: 'Review last draft', result: REVIEW }] : null,
+        onClosing: (p) => {
+            if (p.result === (c.POPUP_RESULT?.AFFIRMATIVE ?? 1) && !cardName) {
+                toastr.warning('Give the card a name.');
+                return false;
+            }
+            return true;
+        },
+    });
+    $(popup.dlg).addClass('pf-card-dialog');
+    const result = await popup.show();
+    state.name = cardName;
+    save();
+
+    if (result === REVIEW) return openCardReview();
+    if (result === (c.POPUP_RESULT?.AFFIRMATIVE ?? 1)) await runCardGeneration(cardName);
+}
+
+/** Step 2: one request for the card, then one per alternate greeting. */
+async function runCardGeneration(name) {
+    if (isBusy()) return;
+    const state = cardState();
+    const opts = state.options;
+    const total = 1 + opts.greetings.length;
+    let draft = null;
+
+    setBusy(true, total > 1 ? `Writing the card (1 of ${total})…` : 'Writing the card…');
+    try {
+        draft = parseCardReply(await callModel(buildCardMessages(opts, name)), opts, name);
+        for (const [i, scene] of opts.greetings.entries()) {
+            setBusy(true, `Writing alternate greeting ${i + 1} of ${opts.greetings.length} (${i + 2} of ${total})…`);
+            const reply = await callModel(buildGreetingMessages(opts, draft, scene));
+            const greeting = replyBlock(reply, 'greeting') ?? extractFieldValue(reply, 'greeting');
+            if (greeting) draft.alternate_greetings.push(greeting);
+        }
+        addLog('ai', `Wrote a character card for ${name}${draft.alternate_greetings.length ? ` with ${draft.alternate_greetings.length} alternate greeting${draft.alternate_greetings.length === 1 ? '' : 's'}` : ''}.`);
+    } catch (err) {
+        reportError(err);
+        // Keep whatever finished, so the work isn't lost; it can be reviewed from the Make card dialog.
+        if (draft) addLog('info', 'The card draft was saved as far as it got. Open Make card → Review last draft to see it.');
+    } finally {
+        if (draft) {
+            state.draft = draft;
+            save();
+        }
+        setBusy(false);
+        if (ui) renderLog();
+    }
+    const complete = draft && draft.alternate_greetings.length === opts.greetings.length;
+    if (complete) await openCardReview();
+}
+
+/** Step 3: review and edit the draft, choose the avatar, then create the character. */
+async function openCardReview() {
+    const c = ctx();
+    const state = cardState();
+    const draft = state.draft;
+    if (!draft) return;
+
+    const personaAvatar = session().targetAvatar && c.powerUserSettings.personas?.[session().targetAvatar] ? session().targetAvatar : '';
+    const personaLabel = personaAvatar ? c.powerUserSettings.personas[personaAvatar] : '';
+    const form = $(`
+        <div class="pf-card-form pf-card-review">
+            <h3>Review the card</h3>
+            <p class="pf-card-intro">Edit anything you like. Nothing is created until you press <b>Create character</b>.</p>
+            ${draft.vts && draft.vts !== currentVersion()?.ts ? '<p class="pf-card-note"><i class="fa-solid fa-circle-info"></i> This draft was written from a different persona version than the one you\'re viewing. Its description is the version it was written from.</p>' : ''}
+            <label>Name <input class="text_pole" data-draft="name" type="text"></label>
+            <label>Scenario <textarea class="text_pole" data-draft="scenario" rows="4"></textarea></label>
+            <label>Personality summary <textarea class="text_pole" data-draft="personality" rows="3"></textarea></label>
+            <label>First message <textarea class="text_pole" data-draft="first_mes" rows="9"></textarea></label>
+            <div class="pf-card-alts"></div>
+            <label>Example dialogue <textarea class="text_pole" data-draft="mes_example" rows="6" placeholder="(none)"></textarea></label>
+            <label>Tags <input class="text_pole" data-draft="tags" type="text"></label>
+            <label>Creator notes <textarea class="text_pole" data-draft="creator_notes" rows="2"></textarea></label>
+            <details class="pf-card-description">
+                <summary>Description (the persona)</summary>
+                <textarea class="text_pole" data-draft="description" rows="10" spellcheck="false"></textarea>
+            </details>
+            <fieldset>
+                <legend>Avatar</legend>
+                <select class="text_pole pf-card-avatar-source">
+                    ${personaAvatar ? `<option value="persona">Use ${escapeHtml(personaLabel)}'s persona avatar</option>` : ''}
+                    <option value="file">Choose an image…</option>
+                    <option value="default"${personaAvatar ? '' : ' selected'}>Default avatar</option>
+                </select>
+                <input type="file" accept="image/*" class="pf-card-avatar-file pf-hidden">
+            </fieldset>
+            <label class="checkbox_label"><input type="checkbox" class="pf-card-open" checked> Open the character when it's created</label>
+        </div>`);
+
+    for (const key of ['name', 'scenario', 'personality', 'first_mes', 'mes_example', 'tags', 'creator_notes', 'description']) {
+        form.find(`[data-draft="${key}"]`).val(draft[key] ?? '');
+    }
+    form.on('input', '[data-draft]', function() {
+        draft[$(this).attr('data-draft')] = String($(this).val());
+        save();
+    });
+
+    const renderAlts = () => {
+        const box = form.find('.pf-card-alts').empty();
+        draft.alternate_greetings.forEach((text, i) => {
+            const block = $(`<label class="pf-card-alt">
+                <span class="pf-card-alt-head">Alternate greeting ${i + 1} <i class="fa-solid fa-xmark pf-card-remove-alt" title="Remove this greeting"></i></span>
+                <textarea class="text_pole" rows="7"></textarea>
+            </label>`);
+            block.find('textarea').val(text).on('input', function() { draft.alternate_greetings[i] = String($(this).val()); save(); });
+            block.find('.pf-card-remove-alt').on('click', (e) => { e.preventDefault(); draft.alternate_greetings.splice(i, 1); save(); renderAlts(); });
+            box.append(block);
+        });
+    };
+    renderAlts();
+
+    const fileInput = form.find('.pf-card-avatar-file');
+    form.find('.pf-card-avatar-source').on('change', function() {
+        fileInput.toggleClass('pf-hidden', $(this).val() !== 'file');
+    });
+
+    let choice = null;
+    const popup = new c.Popup(form, c.POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Create character',
+        cancelButton: 'Not now',
+        wide: true,
+        allowVerticalScrolling: true,
+        onClosing: (p) => {
+            if (p.result !== (c.POPUP_RESULT?.AFFIRMATIVE ?? 1)) return true;
+            if (!String(draft.name ?? '').trim()) {
+                toastr.warning('Give the character a name.');
+                return false;
+            }
+            const source = String(form.find('.pf-card-avatar-source').val());
+            const file = fileInput[0].files?.[0] ?? null;
+            if (source === 'file' && !file) {
+                toastr.warning('Choose an image, or pick another avatar option.');
+                return false;
+            }
+            choice = { source, file, open: form.find('.pf-card-open').prop('checked'), personaAvatar };
+            return true;
+        },
+    });
+    $(popup.dlg).addClass('pf-card-dialog');
+    await popup.show();
+    if (choice) await createCharacterCard(draft, choice);
+}
+
+/** Loads the chosen avatar image (cropped to the card's 2:3 shape unless the user never resizes avatars). */
+async function cardAvatarBlob(choice) {
+    const c = ctx();
+    let url = null;
+    if (choice.source === 'file' && choice.file) url = URL.createObjectURL(choice.file);
+    else if (choice.source === 'persona' && choice.personaAvatar) {
+        const mod = await loadPersonasModule();
+        url = mod.getUserAvatar?.(choice.personaAvatar) ?? `User Avatars/${choice.personaAvatar}`;
+    }
+    if (!url) return null;
+
+    const original = await (await fetch(url, { cache: 'no-cache' })).blob();
+    if (c.powerUserSettings.never_resize_avatars || c.POPUP_TYPE?.CROP === undefined) return original;
+
+    const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(original);
+    });
+    const cropped = await new c.Popup('Crop the character avatar', c.POPUP_TYPE.CROP, '', { cropImage: dataUrl, cropAspect: 2 / 3 }).show();
+    return cropped ? await (await fetch(String(cropped))).blob() : original;
+}
+
+async function createCharacterCard(draft, choice) {
+    const c = ctx();
+    try {
+        const form = new FormData();
+        const fields = {
+            ch_name: draft.name.trim(),
+            description: draft.description,
+            personality: draft.personality,
+            scenario: draft.scenario,
+            first_mes: draft.first_mes,
+            mes_example: draft.mes_example,
+            creator_notes: draft.creator_notes,
+            tags: draft.tags,
+            creator: '',
+            character_version: '',
+            talkativeness: '0.5',
+            fav: 'false',
+            extensions: '{}',
+        };
+        for (const [key, value] of Object.entries(fields)) form.append(key, value ?? '');
+        for (const greeting of draft.alternate_greetings.filter(g => g.trim())) form.append('alternate_greetings', greeting);
+
+        const avatar = await cardAvatarBlob(choice);
+        if (avatar) form.append('avatar', new File([avatar], 'avatar.png', { type: avatar.type || 'image/png' }));
+
+        const res = await fetch('/api/characters/create', {
+            method: 'POST',
+            headers: c.getRequestHeaders({ omitContentType: true }),
+            body: form,
+            cache: 'no-cache',
+        });
+        if (!res.ok) throw new Error(`SillyTavern couldn't create the character (${res.status} ${res.statusText}).`);
+        const avatarId = (await res.text()).trim();
+
+        await c.getCharacters?.();
+        addLog('info', `Created character ${fields.ch_name}.`);
+        toastr.success(`Character ${fields.ch_name} created.`);
+        if (choice.open) {
+            const index = c.characters?.findIndex(ch => ch.avatar === avatarId) ?? -1;
+            if (index >= 0) await c.selectCharacterById(index);
+        }
+    } catch (err) {
+        reportError(err);
+    }
+    if (ui) renderLog();
 }
 
 function renderLog() {
@@ -1411,6 +1883,7 @@ async function runGenerate() {
         const { xml, error } = finalizeXml(reply, locked);
         const v = pushVersion(xml, 'Generated from concept');
         addLog('ai', error ? `Generated, but the XML didn't parse (${error}). Try raising the response length.` : 'Generated a new version.', v);
+        if (ui && currentTab === 'design') setTab('fields');
     } catch (err) {
         reportError(err);
     } finally {
@@ -1713,17 +2186,11 @@ function bindForge() {
         session().index = Number($(this).data('v')) - 1;
         save();
         renderAll();
+        if (currentTab === 'design') setTab('fields'); // on phones the log and the fields are separate tabs
     });
 
     ui.find('.pf-tab').on('click', function() {
-        const tab = $(this).data('tab');
-        ui.find('.pf-tab').removeClass('active');
-        $(this).addClass('active');
-        ui.find('#pf-fields').toggleClass('pf-hidden', tab !== 'fields');
-        ui.find('#pf-xml').toggleClass('pf-hidden', tab !== 'xml');
-        ui.find('#pf-avatar').toggleClass('pf-hidden', tab !== 'avatar');
-        if (tab === 'fields') renderFields();
-        if (tab === 'avatar') renderAvatarResults();
+        setTab(String($(this).attr('data-tab')));
     });
 
     ui.find('#pf-xml').on('input', function() {
@@ -1791,6 +2258,7 @@ function bindForge() {
     ui.find('#pf-load').on('click', () => !isBusy() && loadFromPersona());
     ui.find('#pf-update').on('click', () => !isBusy() && saveToSelected());
     ui.find('#pf-create').on('click', () => !isBusy() && saveAsNewPersona());
+    ui.find('#pf-card').on('click', () => !isBusy() && openCardDialog());
     ui.find('#pf-new-session').on('click', () => !isBusy() && newSession());
     ui.find('#pf-persona-select').on('change', function() {
         session().targetAvatar = String($(this).val() || '');
@@ -1812,6 +2280,10 @@ async function openForge() {
     bindForge();
     buildAvatarPane();
     renderAll();
+    // On a phone, start where the work is: the fields if there's a persona, otherwise the concept.
+    setTab(mobileQuery.matches && !currentXml() ? 'design' : 'fields');
+    mobileQuery.addEventListener('change', onViewportChange);
+    window.addEventListener('resize', onViewportChange);
     const popup = new c.Popup(ui, c.POPUP_TYPE.TEXT, '', {
         wide: true,
         large: true,
@@ -1827,6 +2299,8 @@ async function openForge() {
     try {
         await popup.show();
     } finally {
+        mobileQuery.removeEventListener('change', onViewportChange);
+        window.removeEventListener('resize', onViewportChange);
         ui = null;
         save();
     }

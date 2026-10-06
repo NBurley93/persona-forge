@@ -405,29 +405,9 @@
 }
 
 /* Phones: stack the panes */
-@media (max-width: 1000px) {
-    .pf-root {
-        grid-template-columns: 1fr;
-        overflow-y: auto;
-    }
-
-    .pf-log-section {
-        min-height: 100px;
-        max-height: 180px;
-    }
-
-    .pf-pane {
-        min-height: 50vh;
-    }
-
-    .pf-field {
-        grid-template-columns: 1fr auto;
-    }
-
-    .pf-field-label {
-        grid-column: 1 / -1;
-        padding-top: 0;
-    }
+/* The Design tab is only for phones; on desktop the left column is always visible. */
+.pf-tab-design {
+    display: none;
 }
 
 /* Field styles */
@@ -629,4 +609,332 @@
 
 .pf-avatar-note {
     opacity: 0.6;
+}
+
+/* ---------------------------------------------------------------------------
+   Phones and narrow windows (SillyTavern's mobile breakpoint, mirrored in index.js).
+   The window goes full-screen and shows one pane at a time: Design (the left
+   column), Fields, XML or Avatar.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1000px) {
+    .pf-dialog.large_dialogue_popup {
+        width: 100dvw;
+        height: 100dvh !important;
+        max-width: 100dvw !important;
+        max-height: 100dvh;
+        min-width: 0;
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        padding: env(safe-area-inset-top, 0) 6px env(safe-area-inset-bottom, 0);
+    }
+
+    .pf-dialog .popup-body {
+        max-height: 100dvh !important;
+    }
+
+    .pf-dialog .popup-content {
+        margin-top: 4px;
+        padding: 0 2px;
+    }
+
+    .pf-dialog .popup-controls {
+        padding: 4px 0;
+    }
+
+    .pf-root {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Let the right column's toolbar, panes and footer sit directly in the root's column. */
+    .pf-right {
+        display: contents;
+    }
+
+    .pf-toolbar {
+        order: 0;
+        gap: 6px 10px;
+    }
+
+    .pf-left,
+    .pf-pane {
+        order: 1;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .pf-footer {
+        order: 2;
+    }
+
+    .pf-root:not([data-tab="design"]) .pf-left {
+        display: none;
+    }
+
+    .pf-tab-design {
+        display: block;
+    }
+
+    .pf-tabs {
+        flex: 1 1 100%;
+    }
+
+    .pf-tab {
+        flex: 1;
+        text-align: center;
+        padding: 8px 4px;
+    }
+
+    .pf-versions {
+        flex: 1;
+    }
+
+    .pf-versions .menu_button {
+        padding: 6px 12px;
+    }
+
+    .pf-version-label {
+        flex: 1;
+    }
+
+    .pf-log-section {
+        min-height: 80px;
+    }
+
+    /* Field rows: label and buttons on one line, the text box full width beneath. */
+    .pf-field {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2px 8px;
+        padding: 4px 0;
+    }
+
+    .pf-field-label {
+        grid-column: 1;
+        grid-row: 1;
+        padding-top: 4px;
+    }
+
+    .pf-field-actions {
+        grid-column: 2;
+        grid-row: 1;
+        padding-top: 0;
+    }
+
+    .pf-field-input {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+
+    .pf-group {
+        padding: 6px 6px 8px;
+    }
+
+    .pf-depth-0 > .pf-group-body > .pf-group {
+        margin-bottom: 6px;
+    }
+
+    .pf-footer {
+        gap: 6px;
+    }
+
+    .pf-persona-select {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+    .pf-spacer {
+        display: none;
+    }
+
+    .pf-footer .menu_button {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    .pf-avatar-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+
+    .pf-nsfw-toggle {
+        margin-left: 0 !important;
+    }
+}
+
+/* Touch screens: bigger targets, always-visible actions, and 16px inputs so iOS doesn't zoom on focus. */
+@media (pointer: coarse) {
+    .pf-field-actions,
+    .pf-group-actions {
+        gap: 4px;
+    }
+
+    .pf-field-actions i,
+    .pf-group-actions i,
+    .pf-copy-out {
+        font-size: 1.1em;
+        padding: 6px;
+        opacity: 0.7;
+    }
+
+    .pf-root textarea,
+    .pf-root input,
+    .pf-root select,
+    .pf-card-form textarea,
+    .pf-card-form input,
+    .pf-card-form select,
+    .pf-style-form textarea,
+    .pf-style-form select {
+        font-size: max(16px, 1em);
+    }
+}
+
+/* Character card dialogs */
+.pf-card-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+}
+
+.pf-card-form h3 {
+    margin: 0;
+}
+
+.pf-card-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.pf-card-form label.checkbox_label {
+    flex-direction: row;
+    align-items: center;
+}
+
+.pf-card-form .text_pole {
+    margin: 0;
+}
+
+.pf-card-form textarea {
+    resize: vertical;
+}
+
+.pf-card-form fieldset {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 6px 10px 10px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pf-card-form legend {
+    font-weight: 600;
+    padding: 0 4px;
+}
+
+.pf-card-intro,
+.pf-card-estimate {
+    margin: 0;
+    opacity: 0.75;
+    font-size: 0.92em;
+}
+
+.pf-card-note {
+    margin: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--SmartThemeQuoteColor);
+    border-radius: 6px;
+    font-size: 0.92em;
+}
+
+.pf-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px 12px;
+}
+
+.pf-card-greetings {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pf-card-greetings:empty {
+    display: none;
+}
+
+.pf-card-greeting {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+}
+
+.pf-card-greeting-num {
+    padding-top: 6px;
+    min-width: 1.5em;
+    text-align: right;
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-card-remove-greeting,
+.pf-card-remove-alt {
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 6px 4px;
+}
+
+.pf-card-remove-greeting:hover,
+.pf-card-remove-alt:hover {
+    opacity: 1;
+    color: var(--warning, #e57373);
+}
+
+.pf-card-add-greeting {
+    align-self: flex-start;
+    margin: 0;
+}
+
+.pf-card-alts {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pf-card-alts:empty {
+    display: none;
+}
+
+.pf-card-alt-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pf-card-description summary {
+    cursor: pointer;
+    opacity: 0.85;
+    margin-bottom: 4px;
+}
+
+.pf-card-description textarea {
+    width: 100%;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+}
+
+@media (max-width: 1000px) {
+    .pf-card-dialog.wide_dialogue_popup {
+        min-width: 0;
+        width: 100dvw;
+        max-width: 100dvw !important;
+    }
+
+    .pf-card-grid {
+        grid-template-columns: 1fr;
+    }
 }

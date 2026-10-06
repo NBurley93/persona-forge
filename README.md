@@ -4,8 +4,8 @@ A SillyTavern extension for designing personas with the AI. You describe a conce
 an XML template, and then you keep shaping it until it's right. When you're done, you save it as a
 persona.
 
-> **Mobile compatibility is still pending.** Persona Forge is built and tested for desktop browsers. On a
-> phone the window may be cramped or awkward to use.
+Works on desktop and on phones. On a phone or any window under 1000px wide, the Forge goes full-screen
+and shows one pane at a time: **Design** (concept, log and refinements), **Fields**, **XML** and **Avatar**.
 
 ## Install
 
@@ -56,6 +56,21 @@ paragraph) and **booru-tag** models such as Anima, each with a positive and a ne
   in, and duplicates are dropped.
 - Krea 2 Turbo runs at CFG 1, where ComfyUI ignores negative prompts, so the Krea negative only matters if you raise CFG.
 - Prompts are written for the version you're viewing, and you can edit them in place before copying.
+
+## Character cards
+
+**Make card** turns the persona into a standalone SillyTavern character.
+
+1. **Describe the setup.** Era, starting year, location and premise for the scenario; the opening scene, narration
+   (third, second or first person), length and formatting for the first message. Anything left blank is the AI's choice.
+2. **Add alternate greetings** if you want them, each with its own starting scene (or blank for the AI's choice).
+   Each alternate greeting is written in its own request, so every one you add makes the card take longer.
+3. **Write card.** The AI writes the scenario, a personality summary, the first message, example dialogue (optional),
+   tags and creator notes, then each alternate greeting. The persona itself becomes the card's description.
+4. **Review.** Edit any field, remove greetings, and pick the avatar: the persona's own, an image of your choice, or the
+   default. Images are cropped to the card's 2:3 shape. Then **Create character**, and optionally open it.
+
+If you cancel partway or close the review, the draft is kept: **Make card → Review last draft** picks it up again.
 
 ## Settings (Extensions panel → Persona Forge)
 
